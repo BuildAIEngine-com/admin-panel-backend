@@ -1,9 +1,8 @@
 const express = require("express");
-const router = express.Router();
-const { createCommunity, addUserToCommunity, assignRole } = require("../controllers/communityController");
+const { createCommunity } = require("../controllers/communityController"); // ✅ Import correctly
 
-router.post("/create", createCommunity);
-router.post("/add-user", addUserToCommunity);
-router.put("/assign-role", assignRole);
+const router = express.Router();
+
+router.post("/", createCommunity); // ✅ Use the function correctly
 
 module.exports = router;

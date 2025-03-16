@@ -1,51 +1,37 @@
-const apiClient = require("../config/mattermost");
+require("dotenv").config(); // Load environment variables
+const axios = require("axios");
+
+// Use environment variables for security
+const MATTERMOST_URL = process.env.MATTERMOST_URL || "https://mattermost.buildaiengine.com/api/v4";
+const MATTERMOST_TOKEN = process.env.MATTERMOST_TOKEN; // Store this in .env file
+
+if (!MATTERMOST_TOKEN) {
+  console.error("❌ MATTERMOST_TOKEN is missing. Please check your .env file.");
+  process.exit(1); // Stop execution if token is missing
+}
 
 exports.createCommunity = async (req, res) => {
-  try {
-    const { name, display_name, type } = req.body; // type: "O" (open) or "P" (private)
-    
-    const response = await apiClient.post("/teams", {
-      name,
-      display_name,
-      type,
-    });
+  const { name, description } = req.body;
 
+  try {
+    console.log("📤 Creating Mattermost Community:", name);
+
+    const response = await axios.post(
+      `${MATTERMOST_URL}/teams`,
+      {
+        name: name.toLowerCase().replace(/\s+/g, "-"), // Convert to valid team ID
+        display_name: name,
+        type: "O", // "O" = Open team, "I" = Invite-only
+      },
+      {
+        headers: { Authorization: `Bearer ${MATTERMOST_TOKEN}` },
+      }
+    );
+
+    console.log("✅ Mattermost Response:", response.data);
     res.status(201).json(response.data);
   } catch (error) {
-    res.status(500).json({ message: "Error creating community", error: error.response.data });
+    console.error("❌ Mattermost API Error:", error.response?.data || error.message);
+    res.status(500).json({ error: error.response?.data || "Failed to create community" });
   }
 };
-
-
-
-
-//add user to community
-
-exports.addUserToCommunity = async (req, res) => {
-    try {
-      const { team_id, user_id } = req.body;
-  
-      await apiClient.post(`/teams/${team_id}/members`, { team_id, user_id });
-  
-      res.status(200).json({ message: "User added successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Error adding user", error: error.response.data });
-    }
-  };
-
-  
-  //assign roles to users
-  exports.assignRole = async (req, res) => {
-    try {
-      const { team_id, user_id, roles } = req.body; // roles: "team_admin", "team_user", etc.
-  
-      await apiClient.put(`/teams/${team_id}/members/${user_id}/roles`, { roles });
-  
-      res.status(200).json({ message: "Role updated successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Error assigning role", error: error.response.data });
-    }
-  };
-
-  
-  //
