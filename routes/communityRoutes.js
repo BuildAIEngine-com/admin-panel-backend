@@ -1,19 +1,28 @@
 const express = require("express");
-const { createCommunity,getAllCommunities,deleteCommunity } = require("../controllers/communityController"); // ✅ Import correctly
+const {
+  createCommunity,
+  getAllCommunities,
+  deleteCommunity,
+  getUserCommunities,
+} = require("../controllers/communityController");
 
 const router = express.Router();
 
-// ✅ Route to create a new community
-router.post("/", createCommunity);
+// ✅ Create a new community
+router.post("/:id", createCommunity);
 
-// ✅ Route to fetch all communities
+// ✅ Get all communities
 router.get("/", getAllCommunities);
 
- // Delete community by ID
- router.delete("/:id", (req, res, next) => {
-    console.log("DELETE request received for:", req.params.id);
-    next();
-  }, deleteCommunity);
-  
+// ✅ Get user-specific communities
+router.get("/user/:id", getUserCommunities);
+
+
+// ✅ Delete a community by ID
+router.delete("/:id", deleteCommunity);
+
+
+
+
 
 module.exports = router;

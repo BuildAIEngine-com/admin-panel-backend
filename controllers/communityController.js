@@ -1,58 +1,66 @@
 require("dotenv").config(); // Load environment variables
 const axios = require("axios");
-
-
-// Use environment variables for security
-const MATTERMOST_URL = process.env.MATTERMOST_URI || "https://mattermost.buildaiengine.com/api/v4";
-const MATTERMOST_TOKEN = process.env.MATTERMOST_TOKEN; // Store this in .env file
-
-if (!MATTERMOST_TOKEN) {
-  console.error("❌ MATTERMOST_TOKEN is missing. Please check your .env file.");
-  process.exit(1); // Stop execution if token is missing
-}
-
-// ✅ Create a new community
-
 const Community = require("../models/Community");
+const User = require("../models/User");
+const nodemailer = require("nodemailer");
+
+const MATTERMOST_BASE_URL = process.env.MATTERMOST_URL;
+const MATTERMOST_TOKEN = process.env.MATTERMOST_TOKEN;
+
+console.log("✅ Mattermost API URL:", process.env.MATTERMOST_URL);
+console.log("✅ Mattermost Token:", process.env.MATTERMOST_TOKEN ? "Loaded" : "Missing");
+
+
+// =====================✅ Get User's Communities-------------------------------------------------------------
+exports.getUserCommunities = async (req, res) => {
+  try {
+    const { userId } = req.query; // Or extract from req.user if using auth middleware
+    if (!userId) return res.status(400).json({ message: "User ID is required" });
+
+    const userCommunities = await Community.find({ members: userId });
+    res.status(200).json(userCommunities);
+  } catch (error) {
+    console.error("Error fetching user communities:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// ------------------------------------✅ Create a Community---------------------------------------------
+
 
 exports.createCommunity = async (req, res) => {
+  console.log("📥 Received Request Body:", req.body);
+
+  const { name, description } = req.body;
+  if (!name || !description) {
+    return res.status(400).json({ message: "Name and description are required" });
+  }
+
   try {
-    const { name, description } = req.body;
-
-    // Mattermost API details
-    const MATTERMOST_URL = process.env.MATTERMOST_URI || "https://mattermost.buildaiengine.com/api/v4";
-    const MATTERMOST_TOKEN = process.env.MATTERMOST_TOKEN; // Store this in .env file
-
-    // Create a Mattermost team
+    // ✅ Create Mattermost Team
     const response = await axios.post(
-      `${MATTERMOST_URL}/teams`,
-      {
-        name: name.toLowerCase().replace(/\s+/g, "-"), // Convert name to slug
-        display_name: name,
-        type: "O", // 'O' for open, 'I' for invite-only
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${MATTERMOST_TOKEN}`,
-        },
-      }
+      `${process.env.MATTERMOST_URL}/teams`,
+      { name, display_name: name, description, type: "O" },
+      { headers: { Authorization: `Bearer ${process.env.MATTERMOST_TOKEN}`, "Content-Type": "application/json" } }
     );
 
-    const mattermostTeamId = response.data.id; // Store Mattermost team ID
+    const mattermostTeamId = response.data.id; // Get the Mattermost Team ID
+    console.log("✅ Mattermost Team Created:", mattermostTeamId);
 
-    // Create community in MongoDB with Mattermost team ID
+    // ✅ Save Community in MongoDB
     const newCommunity = new Community({
       name,
       description,
-      mattermostTeamId,
+      mattermostTeamId, // Save Mattermost ID
+      members: [], // Initialize empty members list
     });
-    console.log("New Community Created:", newCommunity); // Debug log
 
-    await newCommunity.save();
-    console.log("New Community Created:", newCommunity); // Debug log
+    await newCommunity.save(); // Save in MongoDB
+    console.log("✅ Community saved in MongoDB");
+
     res.status(201).json(newCommunity);
   } catch (error) {
-    console.error("Error creating community:", error.response?.data || error.message);
+    console.error("❌ Error creating community:", error?.response?.data || error.message);
     res.status(500).json({ message: "Failed to create community" });
   }
 };
@@ -60,16 +68,13 @@ exports.createCommunity = async (req, res) => {
 
 
 
-
-// ✅ Fetch all communities
-
-
+//------------------------- ✅ Get All Communities-----------------------------------------
 exports.getAllCommunities = async (req, res) => {
   try {
-    const communities = await Community.find(); // ✅ Ensure this is correct
+    const communities = await Community.find();
     res.json(communities);
-  } catch (err) {
-    console.error("Error fetching communities:", err);
+  } catch (error) {
+    console.error("Error fetching communities:", error);
     res.status(500).json({ message: "Failed to fetch communities" });
   }
 };
@@ -78,46 +83,26 @@ exports.getAllCommunities = async (req, res) => {
 
 
 
-
-
+//----------------- ✅ Delete a Community-------------------------------------------
 exports.deleteCommunity = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("Deleting community with ID:", id);
-
-    // Find the community in the database
     const community = await Community.findById(id);
-    if (!community) {
-      return res.status(404).json({ message: "Community not found" });
-    }
+    if (!community) return res.status(404).json({ message: "Community not found" });
 
-// Use environment variables for security
-const MATTERMOST_URL = process.env.MATTERMOST_URI || "https://mattermost.buildaiengine.com/api/v4";
-const MATTERMOST_TOKEN = process.env.MATTERMOST_TOKEN; // Store this in .env file
-
-    // Attempt to delete from Mattermost
     try {
-      const response = await axios.delete(
-        `${MATTERMOST_URL}/teams/${community.mattermostTeamId}`, // Use the stored Mattermost team ID
-        {
-          headers: {
-            Authorization: `Bearer ${MATTERMOST_TOKEN}`,
-          },
-        }
-      );
-      console.log("Mattermost team deleted:", response.data);
+      await axios.delete(`${MATTERMOST_BASE_URL}/teams/${community.mattermostTeamId}`, {
+        headers: { Authorization: `Bearer ${MATTERMOST_TOKEN}` },
+      });
     } catch (error) {
       console.error("Error deleting Mattermost team:", error.response?.data || error.message);
       return res.status(500).json({ message: "Failed to delete community from Mattermost" });
     }
 
-    // Delete from MongoDB
     await Community.findByIdAndDelete(id);
-
-    res.json({ message: "Community deleted successfully from both DB and Mattermost" });
+    res.json({ message: "Community deleted successfully" });
   } catch (error) {
     console.error("Error deleting community:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
-
