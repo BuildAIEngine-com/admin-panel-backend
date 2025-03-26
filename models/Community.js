@@ -2,9 +2,15 @@ const mongoose = require("mongoose");
 
 const communitySchema = new mongoose.Schema(
   {
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true, // ✅ Ensures each user can create only one community
+    },
     name: { type: String, required: true, trim: true, unique: true },
     description: { type: String, trim: true },
-    mattermostTeamId: { type: String, required: true, unique: true }, // Ensuring uniqueness
+    mattermostTeamId: { type: String, required: true, unique: true }, // ✅ Ensuring uniqueness
     members: [
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -13,10 +19,10 @@ const communitySchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true } // Adds createdAt & updatedAt automatically
+  { timestamps: true } // ✅ Adds createdAt & updatedAt automatically
 );
 
-// Indexing for better performance
+// ✅ Indexing for better performance
 communitySchema.index({ mattermostTeamId: 1 });
 
 module.exports = mongoose.model("Community", communitySchema);
